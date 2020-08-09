@@ -5,11 +5,15 @@ from itertools import combinations
 from tkinter import *
 import numpy as np
 
-size_of_board = 400
+size_of_board = 800
+Green_color = '#7BC043'
+
+
 class Agent:
     def __init__(self, n, m, s, k, red_mushrooms, blue_mushrooms, obstacles):
         self.m = m
         self.n = n
+        # 0:left 3:down 1:right 2:up
         self.acts = {0: [0, 1], 1: [1, 0], 2: [0, -1], 3: [-1, 0]}
         self.action = None
         self.H = np.full((n, m), None)
@@ -24,8 +28,9 @@ class Agent:
         self.RedEaten = False
         self.BlueEaten = False
         self.remaining = 2 * k
-        self.method = 3
+        self.method = 2
         self.most_distance = 0
+        self.steps = 0
         # gui init
         self.window = Tk()
         self.window.title('Mushroom Eater!')
@@ -35,6 +40,7 @@ class Agent:
         self.window.bind('<Button-1>', self.click)
         self.initialize_board()
         self.last_mario = None
+        self.finished = False
 
     @staticmethod
     def most_dist(RM, BM):
@@ -51,7 +57,7 @@ class Agent:
                 maximum = manhattan
         return maximum
 
-    ## calculates heuristic value based on the chosen method
+    # calculates heuristic value based on the chosen method
     def cal_heu(self, sp):
         if self.method == 1:
             if sp in self.RedMushrooms or sp in self.BlueMushrooms:
@@ -80,13 +86,16 @@ class Agent:
 
     def step(self):
         if self.RedEaten and self.BlueEaten:
+            self.finished=True
+            self.display_finished()
             return True
         else:
             self.action = self.LRTA_Agent(deepcopy(self.sp))
             self.s = deepcopy(self.sp)
             sp = self.next(self.s, self.action)
-            print("\n\naction:", self.action)
-            print("next state:", sp)
+            print_action = {3: 'left', 0: 'down', 2: 'up', 1: "right"}
+            print("\n\naction:", print_action[self.action])
+            print("next state:", sp[0] + 1, 6 - sp[1])
             self.move_mario(sp)
             if sp in self.RedMushrooms.keys():
                 print('red mushroom at', sp)
@@ -100,9 +109,10 @@ class Agent:
                 self.remaining -= 1
                 self.removeBlue(sp)
                 self.BlueMushrooms.pop(sp)
+
             self.sp = deepcopy(sp)
 
-    ## LRTA* algorithm for each step
+    # LRTA* algorithm for each step
     def LRTA_Agent(self, sp):
         if not self.H[sp[0]][sp[1]]:
             self.h[sp[0]][sp[1]] = self.H[sp[0]][sp[1]] = self.cal_heu(sp)
@@ -113,7 +123,7 @@ class Agent:
                 if (self.s[0], self.s[1], act) in self.result.keys():
                     if self.result[(self.s[0], self.s[1], act)] == (self.s[0], self.s[1]):
                         continue
-                cost = self.LRTA_Cost(s, (s[0], s[1], act))
+                cost = self.LRTA_Cost(self.s, (self.s[0], self.s[1], act))
                 if mi > cost:
                     mi = cost
             self.H[self.s[0]][self.s[1]] = mi
@@ -131,7 +141,7 @@ class Agent:
                 best_acts.append(act)
         return random.choice(best_acts)
 
-    ## calculates cost of taking a specific action from a specific state(based on h and H!)
+    # calculates cost of taking a specific action from a specific state(based on h and H!)
     def LRTA_Cost(self, s, res):
         if res not in self.result.keys():
             self.h[s[0]][s[1]] = self.cal_heu(s)
@@ -139,7 +149,7 @@ class Agent:
         sp = self.next(s, res[2])
         return self.H[sp[0]][sp[1]] + 1
 
-    ## determines the next state based on obstacles and walls
+    # determines the next state based on obstacles and walls
     def next(self, s, a):
         if (s[0], s[1], a) in self.result.keys():
             return self.result[(s[0], s[1], a)]
@@ -149,10 +159,22 @@ class Agent:
             statep = s
         return tuple(statep)
 
-    ##-------------------------GUI functions-------------------##
+    # -------------------------GUI functions------------------- #
     def mainloop(self):
         self.window.mainloop()
-    ## draws the gird for our table, places obstacles and mushrooms on board
+
+    def display_finished(self):
+
+        text = "Finished in " + str(self.steps) + " steps"
+
+        self.canvas.delete("all")
+        self.canvas.create_text(size_of_board / 2, size_of_board / 3, font="cmr 20 bold", text=text)
+
+        score_text = 'Heuristic method ' + str(self.method)
+        self.canvas.create_text(size_of_board / 2, 5 * size_of_board / 8, font="cmr 10 bold", fill=Green_color,
+                                text=score_text)
+
+    # draws the gird for our table, places obstacles and mushrooms on board
     def initialize_board(self):
         for i in range(self.m):
             self.canvas.create_line((i + 1) * self.w, 0, self.w * (i + 1), self.w * self.n)
@@ -177,15 +199,18 @@ class Agent:
                                                        self.w * (x + 1) - (self.w / 5), self.w * (y + 1) - (self.w / 5),
                                                        outline="#00f",
                                                        fill="#00f")
-    ## removes a red mushroom from board when eaten!
+
+    # removes a red mushroom from board when eaten!
     def removeRed(self, sp):
         self.canvas.delete(self.RedMushrooms[sp])
         self.canvas.update()
-    ## removes a blue mushroom from board when eaten!
+
+    # removes a blue mushroom from board when eaten!
     def removeBlue(self, sp):
         self.canvas.delete(self.BlueMushrooms[sp])
         self.canvas.update()
-    ## removes mario from its previous position and draws a new mario in new position
+
+    # removes mario from its previous position and draws a new mario in new position
     def move_mario(self, sp):
         self.canvas.delete(self.last_mario)
         self.last_mario = self.canvas.create_polygon(sp[0] * self.w, (sp[1] + 0.5) * self.w,
@@ -193,9 +218,13 @@ class Agent:
                                                      (sp[0] + 1) * self.w, (sp[1] + 0.5) * self.w,
                                                      (sp[0] + 0.5) * self.w, (sp[1] + 1) * self.w, fill="#acf")
         self.canvas.update()
-    ## takes a step with every click
+
+    # takes a step with every click
     def click(self, event):
-        self.step()
+        if not self.finished:
+            self.steps += 1
+            print("step", self.steps)
+            self.step()
 
 
 def get_line(file, n):
@@ -231,3 +260,4 @@ with open('Mario.txt') as f:
 
 agent = Agent(n, m, first_state, k, RedMushrooms, BlueMushrooms, obstacles)
 agent.mainloop()
+print(agent.steps)
